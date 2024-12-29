@@ -1,0 +1,271 @@
+esphome:
+  name: p1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+external_components:
+  - source:
+      type: local
+      path: ./components/
+    components: [dsmr]
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "SSID"
+  password: "PASS"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "ESP1"
+    password: "12345678"
+
+uart:
+    id: uart_bus
+    rx_pin:
+      number: 23
+      inverted: true
+    baud_rate: 115200
+    rx_buffer_size: 3000
+#    debug:
+#      direction: RX
+#      after:
+#        delimiter: "\r\n"
+#      sequence:
+#        - lambda: UARTDebug::log_string(direction, bytes);
+
+# Sync time with Home Assistant.
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+# Text sensors with general information.
+text_sensor:
+  # Expose Uptime human readable
+  - platform: template
+    name: Digitale Meter Uptime
+    id: digitale_meter_uptime_human
+    icon: mdi:clock-start
+  # Expose ESPHome version as sensor.
+  - platform: version
+    name: Digitale Meter ESPHome Version
+  - platform: version
+    name: "ESPHome verzió és build"
+    hide_timestamp: false
+
+  - platform: wifi_info
+    ip_address:
+      name: "P1 IP"
+      update_interval: 60s
+    ssid:
+      name: "P1 Wi-Fi SSID"
+      update_interval: 60s
+    bssid:
+      name: "P1 Wi-Fi BSSID"
+      update_interval: 60s
+
+  - platform: dsmr
+    identification:
+      name: "COSEM logikai készüléknév"
+    equipment_id:
+      name: "Mérő gyáriszám"
+    timestamp:
+      name: "Idő"
+    #Mérőtől függő konfig (valamelyik működik)
+    breaker_status:
+      name: "Megszakító státusz"
+    breaker_status_b:
+      name: "Megszakító státusz"
+
+dsmr:
+  max_telegram_length: 3000
+  crc_check: true
+  receive_timeout: 200ms
+
+sensor:
+# Uptime sensor.
+  - platform: uptime
+    id: digitale_meter_uptime_sensor
+    update_interval: 60s
+    on_raw_value:
+      then:
+        - text_sensor.template.publish:
+            id: digitale_meter_uptime_human
+            state: !lambda |-
+              int seconds = round(id(digitale_meter_uptime_sensor).raw_state);
+              int days = seconds / (24 * 3600);
+              seconds = seconds % (24 * 3600);
+              int hours = seconds / 3600;
+              seconds = seconds % 3600;
+              int minutes = seconds /  60;
+              seconds = seconds % 60;
+              return (
+                (days ? String(days) + "d " : "") +
+                (hours ? String(hours) + "h " : "") +
+                (minutes ? String(minutes) + "m " : "") +
+                (String(seconds) + "s")
+              ).c_str();
+  - platform: template
+    name: "Free Heap Memory"
+    filters: 
+      - throttle: 30s
+      - multiply: 0.001
+    lambda: |-
+      return ESP.getFreeHeap();
+    unit_of_measurement: "kb"
+
+  - platform: dsmr
+    energy_delivered:
+      name: "Hatásos vételezett energia (+A)"
+      accuracy_decimals: 3
+    energy_delivered_tariff1:
+      name: "Hatásos vételezett energia (+A) tarifa 1"
+      accuracy_decimals: 3
+    energy_delivered_tariff2:
+      name: "Hatásos vételezett energia (+A) tarifa 2"
+      accuracy_decimals: 3
+    # 3-4 egyelőre inaktív (2023.03.27)
+    energy_delivered_tariff3:
+      name: "Hatásos vételezett energia (+A) tarifa 3"
+      accuracy_decimals: 3
+    energy_delivered_tariff4:
+      name: "Hatásos vételezett energia (+A) tarifa 4"
+      accuracy_decimals: 3
+
+    energy_returned:
+      name: "Hatásos betáplált energia (-A)"
+      accuracy_decimals: 3
+    energy_returned_tariff1:
+      name: "Hatásos betáplált energia (-A) tarifa 1"
+      accuracy_decimals: 3
+    energy_returned_tariff2:
+      name: "Hatásos betáplált energia (-A) tarifa 2"
+      accuracy_decimals: 3
+    # 3-4 egyelőre inaktív (2023.03.27)
+    energy_returned_tariff3:
+      name: "Hatásos betáplált energia (-A) tarifa 3"
+      accuracy_decimals: 3
+    energy_returned_tariff4:
+      name: "Hatásos betáplált energia (-A) tarifa 4"
+      accuracy_decimals: 3
+    electricity_tariff:
+      name: "Aktuális tarifa"
+    # Frekvencia 2024-től kikerült
+    frequency:
+      name: "Frekvencia"
+      accuracy_decimals: 2
+    voltage_l1:
+      name: "Fázisfeszültség L1"
+    voltage_l2:
+      name: "Fázisfeszültség L2"
+    voltage_l3:
+      name: "Fázisfeszültség L3"
+    current_l1:
+      name: "Pillanatnyi áramerősség L1"
+      accuracy_decimals: 1
+    current_l2:
+      name: "Pillanatnyi áramerősség L2"
+      accuracy_decimals: 1
+    current_l3:
+      name: "Pillanatnyi áramerősség L3"
+      accuracy_decimals: 1
+    energy_absolute:
+      name: "Összes hatásos energia - vételezett és betáplált"
+
+    instantaneous_power_factor:
+      name: "Teljesítménytényező - eredő"
+      device_class: power_factor
+    instantaneous_power_factor_l1:
+      name: "Teljesítménytényező L1"
+      device_class: power_factor
+    instantaneous_power_factor_l2:
+      name: "Teljesítménytényező L2"
+      device_class: power_factor
+    instantaneous_power_factor_l3:
+      name: "Teljesítménytényező L3"
+      device_class: power_factor
+
+    reactive_power_qi:
+      name: "Pillanatnyi teljesítmény - meddő (QI)"
+      device_class: reactive_power
+    reactive_power_qii:
+      name: "Pillanatnyi teljesítmény - meddő (QII)"
+      device_class: reactive_power
+    reactive_power_qiii:
+      name: "Pillanatnyi teljesítmény - meddő (QIII)"
+      device_class: reactive_power
+    reactive_power_qiv:
+      name: "Pillanatnyi teljesítmény - meddő (QIV)"
+      device_class: reactive_power
+
+    energy_positive_reactive:
+      name: "Meddő energia - vételezett (+R)"
+    energy_negative_reactive:
+      name: "Meddő energia - betáplált (-R)"
+    reactive_energy_qi:
+      name: "Meddő energia (QI)"
+    reactive_energy_qii:
+      name: "Meddő energia (QII)"
+    reactive_energy_qiii:
+      name: "Meddő energia (QIII)"
+    reactive_energy_qiv:
+      name: "Meddő energia (QIV)"
+    # Mérőóra áramkorlátozó felügyeletének beállítási értéke
+    electricity_threshold_l1:
+      name: "Áramkorlátozó felügyelet küszöbértéke L1"
+    electricity_threshold_l2:
+      name: "Áramkorlátozó felügyelet küszöbértéke L2"
+    electricity_threshold_l3:
+      name: "Áramkorlátozó felügyelet küszöbértéke L3"
+
+    electricity_threshold:
+      name: "Áramkorlátozó küszöbértéke"
+
+    power_delivered:
+      name: "Pillanatnyi teljesítmény - hatásos vételezett (+A)"
+      accuracy_decimals: 3
+      id: power_consumed
+      on_value:
+        - script.execute: update_power_balance
+    power_returned:
+      name: "Pillanatnyi teljesítmény - hatásos betáplált (-A)"
+      accuracy_decimals: 3
+      id: power_produced
+      on_value:
+        - script.execute: update_power_balance
+
+
+  - platform: uptime
+    name: "P1 üzemidő"
+    device_class: duration
+  - platform: wifi_signal
+    name: "P1 Wi-Fi jel"
+    update_interval: 60s
+
+  - platform: template
+    name: "Pillanatnyi teljesítmény - hatásos eredő"
+    id: power_balance
+    unit_of_measurement: kW
+    state_class: measurement
+    device_class: power
+    accuracy_decimals: 3
+
+
+script:
+  - id: update_power_balance
+    mode: single
+    then:
+      - lambda: |-
+          id(power_balance).publish_state(id(power_produced).state-id(power_consumed).state);
+
